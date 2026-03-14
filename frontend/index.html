@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Admin — Dashboard</title>
+        <link rel="stylesheet" href="app.css" />
+    </head>
+    <body>
+        <nav>
+            <a class="brand" href="index.html">Admin Panel</a>
+            <a href="index.html" class="active">Dashboard</a>
+            <a href="products.html">Products</a>
+            <a href="orders.html">Orders</a>
+        </nav>
+
+        <div class="page">
+            <div class="page-header">
+                <h1>Dashboard</h1>
+            </div>
+
+            <div class="dash-grid">
+                <div class="dash-card">
+                    <div class="label">Products</div>
+                    <div class="value" id="stat-products">—</div>
+                </div>
+                <div class="dash-card">
+                    <div class="label">Orders</div>
+                    <div class="value" id="stat-orders">—</div>
+                </div>
+                <div class="dash-card">
+                    <div class="label">API Status</div>
+                    <div class="value" id="stat-health" style="font-size: 1.1rem">—</div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            async function load() {
+                try {
+                    const [health, products, orders] = await Promise.all([
+                        fetch('/api/health').then((r) => r.json()),
+                        fetch('/api/products').then((r) => r.json()),
+                        fetch('/api/orders').then((r) => r.json()),
+                    ]);
+                    document.getElementById('stat-health').textContent =
+                        health.status === 'ok' ? '✓ OK' : '✗ Error';
+                    document.getElementById('stat-products').textContent =
+                        products.items?.length ?? '—';
+                    document.getElementById('stat-orders').textContent =
+                        orders.items?.length ?? '—';
+                } catch {
+                    document.getElementById('stat-health').textContent = '✗ Unavailable';
+                }
+            }
+            load();
+        </script>
+    </body>
+</html>

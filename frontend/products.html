@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Admin — Products</title>
+        <link rel="stylesheet" href="app.css" />
+    </head>
+    <body>
+        <nav>
+            <a class="brand" href="index.html">Admin Panel</a>
+            <a href="index.html">Dashboard</a>
+            <a href="products.html" class="active">Products</a>
+            <a href="orders.html">Orders</a>
+        </nav>
+
+        <div class="page">
+            <div class="page-header">
+                <h1>Products</h1>
+                <button class="btn btn-primary" onclick="openCreate()">+ Add Product</button>
+            </div>
+
+            <div id="alert-box"></div>
+
+            <div class="card">
+                <div id="table-wrap"><div class="loader">Loading…</div></div>
+            </div>
+        </div>
+
+        <!-- Modal -->
+        <div class="modal-overlay" id="modal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 id="modal-title">Add Product</h2>
+                    <button class="modal-close" onclick="closeModal()">×</button>
+                </div>
+                <form id="product-form" onsubmit="submitForm(event)">
+                    <input type="hidden" id="field-id" />
+                    <div class="form-group">
+                        <label>Name <span style="color: #ef4444">*</span></label>
+                        <input type="text" id="field-name" required maxlength="255" />
+                    </div>
+                    <div class="form-group">
+                        <label>Price <span style="color: #ef4444">*</span></label>
+                        <input type="number" id="field-price" step="0.01" min="0" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="field-category" maxlength="100" />
+                    </div>
+                    <div class="form-group">
+                        <label>SKU</label>
+                        <input type="text" id="field-sku" maxlength="50" />
+                    </div>
+                    <div class="form-group">
+                        <label>Stock Quantity</label>
+                        <input type="number" id="field-stock_quantity" min="0" value="0" />
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="field-description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-check">
+                            <input type="checkbox" id="field-is_active" checked />
+                            Active
+                        </label>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-ghost" onclick="closeModal()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="submit-btn">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            const API = '/api';
+            let editingId = null;
+
+            function statusBadge(active) {
+                return active
+                    ? '<span class="badge badge-green">Active</span>'
+                    : '<span class="badge badge-grey">Inactive</span>';
+            }
+
+            function showAlert(msg, type = 'error') {
+                const box = document.getElementById('alert-box');
+                box.innerHTML = `<div class="alert alert-${type}">${escHtml(msg)}</div>`;
+                setTimeout(() => {
+                    box.innerHTML = '';
+                }, 4000);
+            }
+
+            function escHtml(s) {
+                return String(s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            }
+
+            async function loadProducts() {
+                const wrap = document.getElementById('table-wrap');
+                try {
+                    const res = await fetch(`${API}/products`);
+                    const data = await res.json();
+                    const items = data.items ?? [];
+
+                    if (items.length === 0) {
+                        wrap.innerHTML =
+                            '<div class="empty-state">No products yet. Add your first product.</div>';
+                        return;
+                    }
+
+                    wrap.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Category</th>
+                    <th>SKU</th>
+                    <th>Stock</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items
+                    .map(
+                        (p) => `
+                <tr>
+                    <td>${p.id}</td>
+                    <td>${escHtml(p.name)}</td>
+                    <td>$${Number(p.price).toFixed(2)}</td>
+                    <td>${escHtml(p.category ?? '—')}</td>
+                    <td>${escHtml(p.sku ?? '—')}</td>
+                    <td>${p.stock_quantity ?? 0}</td>
+                    <td>${statusBadge(p.is_active)}</td>
+                    <td>
+                        <div class="actions">
+                            <button class="btn btn-ghost btn-sm" onclick="openEdit(${p.id})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id}, '${escHtml(p.name)}')">Delete</button>
+                        </div>
+                    </td>
+                </tr>`
+                    )
+                    .join('')}
+            </tbody>
+        </table>`;
+                } catch (e) {
+                    wrap.innerHTML = '<div class="empty-state">Failed to load products.</div>';
+                }
+            }
+
+            function openCreate() {
+                editingId = null;
+                document.getElementById('modal-title').textContent = 'Add Product';
+                document.getElementById('submit-btn').textContent = 'Create';
+                document.getElementById('product-form').reset();
+                document.getElementById('field-is_active').checked = true;
+                document.getElementById('modal').classList.add('open');
+            }
+
+            async function openEdit(id) {
+                const res = await fetch(`${API}/products/${id}`);
+                if (!res.ok) {
+                    showAlert('Failed to load product.');
+                    return;
+                }
+                const p = await res.json();
+
+                editingId = id;
+                document.getElementById('modal-title').textContent = 'Edit Product';
+                document.getElementById('submit-btn').textContent = 'Save';
+                document.getElementById('field-id').value = id;
+                document.getElementById('field-name').value = p.name ?? '';
+                document.getElementById('field-price').value = p.price ?? '';
+                document.getElementById('field-category').value = p.category ?? '';
+                document.getElementById('field-sku').value = p.sku ?? '';
+                document.getElementById('field-stock_quantity').value = p.stock_quantity ?? 0;
+                document.getElementById('field-description').value = p.description ?? '';
+                document.getElementById('field-is_active').checked = !!p.is_active;
+                document.getElementById('modal').classList.add('open');
+            }
+
+            function closeModal() {
+                document.getElementById('modal').classList.remove('open');
+            }
+
+            async function submitForm(e) {
+                e.preventDefault();
+                const btn = document.getElementById('submit-btn');
+                btn.disabled = true;
+
+                const payload = {
+                    name: document.getElementById('field-name').value.trim(),
+                    price: parseFloat(document.getElementById('field-price').value),
+                    category: document.getElementById('field-category').value.trim() || null,
+                    sku: document.getElementById('field-sku').value.trim() || null,
+                    stock_quantity:
+                        parseInt(document.getElementById('field-stock_quantity').value, 10) || 0,
+                    description: document.getElementById('field-description').value.trim() || null,
+                    is_active: document.getElementById('field-is_active').checked,
+                };
+
+                try {
+                    const url = editingId ? `${API}/products/${editingId}` : `${API}/products`;
+                    const method = editingId ? 'PUT' : 'POST';
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) {
+                        showAlert(data.error ?? 'Error saving product.');
+                        return;
+                    }
+                    closeModal();
+                    showAlert(editingId ? 'Product updated.' : 'Product created.', 'success');
+                    await loadProducts();
+                } catch {
+                    showAlert('Network error.');
+                } finally {
+                    btn.disabled = false;
+                }
+            }
+
+            async function deleteProduct(id, name) {
+                if (!confirm(`Delete product "${name}"?`)) return;
+                try {
+                    const res = await fetch(`${API}/products/${id}`, { method: 'DELETE' });
+                    if (!res.ok) {
+                        showAlert('Failed to delete.');
+                        return;
+                    }
+                    showAlert('Product deleted.', 'success');
+                    await loadProducts();
+                } catch {
+                    showAlert('Network error.');
+                }
+            }
+
+            document.getElementById('modal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('modal')) closeModal();
+            });
+
+            loadProducts();
+        </script>
+    </body>
+</html>

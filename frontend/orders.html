@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — Orders</title>
+    <link rel="stylesheet" href="app.css">
+</head>
+<body>
+<nav>
+    <a class="brand" href="index.html">Admin Panel</a>
+    <a href="index.html">Dashboard</a>
+    <a href="products.html">Products</a>
+    <a href="orders.html" class="active">Orders</a>
+</nav>
+
+<div class="page">
+    <div class="page-header">
+        <h1>Orders</h1>
+        <button class="btn btn-primary" onclick="openCreate()">+ Add Order</button>
+    </div>
+
+    <div id="alert-box"></div>
+
+    <div class="card">
+        <div id="table-wrap"><div class="loader">Loading…</div></div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 id="modal-title">Add Order</h2>
+            <button class="modal-close" onclick="closeModal()">×</button>
+        </div>
+        <form id="order-form" onsubmit="submitForm(event)">
+            <input type="hidden" id="field-id">
+            <div class="form-group">
+                <label>Customer Name <span style="color:#ef4444">*</span></label>
+                <input type="text" id="field-customer_name" required maxlength="255">
+            </div>
+            <div class="form-group">
+                <label>Customer Email <span style="color:#ef4444">*</span></label>
+                <input type="email" id="field-customer_email" required maxlength="255">
+            </div>
+            <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" id="field-customer_phone" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select id="field-status">
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="processing">Processing</option>
+                    <option value="shipped">Shipped</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="refunded">Refunded</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Total Amount</label>
+                <input type="number" id="field-total_amount" step="0.01" min="0" value="0">
+            </div>
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea id="field-notes" rows="3"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="submit-btn">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const API = '/api';
+let editingId = null;
+
+const STATUS_BADGES = {
+    pending:    'badge-yellow',
+    confirmed:  'badge-blue',
+    processing: 'badge-blue',
+    shipped:    'badge-purple',
+    delivered:  'badge-green',
+    cancelled:  'badge-red',
+    refunded:   'badge-grey',
+};
+
+function statusBadge(status) {
+    const cls = STATUS_BADGES[status] ?? 'badge-grey';
+    return `<span class="badge ${cls}">${escHtml(status)}</span>`;
+}
+
+function showAlert(msg, type = 'error') {
+    const box = document.getElementById('alert-box');
+    box.innerHTML = `<div class="alert alert-${type}">${escHtml(msg)}</div>`;
+    setTimeout(() => { box.innerHTML = ''; }, 4000);
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+async function loadOrders() {
+    const wrap = document.getElementById('table-wrap');
+    try {
+        const res = await fetch(`${API}/orders`);
+        const data = await res.json();
+        const items = data.items ?? [];
+
+        if (items.length === 0) {
+            wrap.innerHTML = '<div class="empty-state">No orders yet. Add your first order.</div>';
+            return;
+        }
+
+        wrap.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Order #</th>
+                    <th>Customer</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(o => `
+                <tr>
+                    <td>${o.id}</td>
+                    <td><code style="font-size:.8rem">${escHtml(o.order_number)}</code></td>
+                    <td>${escHtml(o.customer_name)}</td>
+                    <td>${escHtml(o.customer_email)}</td>
+                    <td>${statusBadge(o.status)}</td>
+                    <td>$${Number(o.total_amount).toFixed(2)}</td>
+                    <td>${fmtDate(o.created_at)}</td>
+                    <td>
+                        <div class="actions">
+                            <button class="btn btn-ghost btn-sm" onclick="openEdit(${o.id})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteOrder(${o.id}, '${escHtml(o.order_number)}')">Delete</button>
+                        </div>
+                    </td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
+    } catch {
+        wrap.innerHTML = '<div class="empty-state">Failed to load orders.</div>';
+    }
+}
+
+function openCreate() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Order';
+    document.getElementById('submit-btn').textContent = 'Create';
+    document.getElementById('order-form').reset();
+    document.getElementById('field-status').value = 'pending';
+    document.getElementById('field-total_amount').value = '0';
+    document.getElementById('modal').classList.add('open');
+}
+
+async function openEdit(id) {
+    const res = await fetch(`${API}/orders/${id}`);
+    if (!res.ok) { showAlert('Failed to load order.'); return; }
+    const o = await res.json();
+
+    editingId = id;
+    document.getElementById('modal-title').textContent = 'Edit Order';
+    document.getElementById('submit-btn').textContent = 'Save';
+    document.getElementById('field-id').value = id;
+    document.getElementById('field-customer_name').value = o.customer_name ?? '';
+    document.getElementById('field-customer_email').value = o.customer_email ?? '';
+    document.getElementById('field-customer_phone').value = o.customer_phone ?? '';
+    document.getElementById('field-status').value = o.status ?? 'pending';
+    document.getElementById('field-total_amount').value = o.total_amount ?? 0;
+    document.getElementById('field-notes').value = o.notes ?? '';
+    document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+    document.getElementById('modal').classList.remove('open');
+}
+
+async function submitForm(e) {
+    e.preventDefault();
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+
+    const payload = {
+        customer_name:  document.getElementById('field-customer_name').value.trim(),
+        customer_email: document.getElementById('field-customer_email').value.trim(),
+        customer_phone: document.getElementById('field-customer_phone').value.trim() || null,
+        status:         document.getElementById('field-status').value,
+        total_amount:   parseFloat(document.getElementById('field-total_amount').value) || 0,
+        notes:          document.getElementById('field-notes').value.trim() || null,
+    };
+
+    try {
+        const url = editingId ? `${API}/orders/${editingId}` : `${API}/orders`;
+        const method = editingId ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) { showAlert(data.error ?? 'Error saving order.'); return; }
+        closeModal();
+        showAlert(editingId ? 'Order updated.' : 'Order created.', 'success');
+        await loadOrders();
+    } catch {
+        showAlert('Network error.');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function deleteOrder(id, number) {
+    if (!confirm(`Delete order "${number}"?`)) return;
+    try {
+        const res = await fetch(`${API}/orders/${id}`, { method: 'DELETE' });
+        if (!res.ok) { showAlert('Failed to delete.'); return; }
+        showAlert('Order deleted.', 'success');
+        await loadOrders();
+    } catch {
+        showAlert('Network error.');
+    }
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('modal')) closeModal();
+});
+
+loadOrders();
+</script>
+</body>
+</html>
