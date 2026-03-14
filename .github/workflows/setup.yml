@@ -1,0 +1,28 @@
+name: Setup
+
+on:
+  workflow_dispatch:
+
+jobs:
+  provision:
+    name: Provision server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Ansible
+        run: pip install --quiet ansible
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Run Ansible playbooks
+        run: |
+          cd ansible
+          ansible-playbook install-docker.yaml
+          ansible-playbook install-make.yaml

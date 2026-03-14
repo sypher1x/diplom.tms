@@ -1,0 +1,12 @@
+---
+- name: Install just on Ubuntu
+  hosts: all
+  become: "{{ ansible_user != 'root' }}"
+  gather_facts: false
+
+  tasks:
+    - name: Install just
+      ansible.builtin.apt:
+        name: just
+        state: present
+        update_cache: true
