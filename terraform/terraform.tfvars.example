@@ -1,0 +1,4 @@
+# Terraform variables — DO NOT COMMIT
+hcloud_token = "your_hetzner_api_token_here"
+ssh_key_name = "your_ssh_key_name"
+server_name  = "diplom-app"
