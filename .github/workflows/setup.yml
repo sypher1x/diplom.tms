@@ -26,3 +26,9 @@ jobs:
           cd ansible
           ansible-playbook install-docker.yaml
           ansible-playbook install-just.yaml
+
+  deploy:
+    name: Initial deploy
+    needs: provision
+    uses: ./.github/workflows/cd.yml
+    secrets: inherit
